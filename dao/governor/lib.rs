@@ -2,6 +2,9 @@
 
 use ink_lang as ink;
 
+/**
+ * governor contract
+ */
 #[ink::contract]
 pub mod governor {
     use ink_storage::{
@@ -74,15 +77,27 @@ pub mod governor {
         governance_token: AccountId,
     }
 
+    /**
+     * Governor メソッドmesoddo
+     */
     impl Governor {
+        /**
+         * new メソッド
+         * param governance_token
+         * param quorum
+         */
         #[ink(constructor, payable)]
         pub fn new(governance_token: AccountId, quorum: u8) -> Self {
+            // call initialize_contract メソッド
             ink_lang::utils::initialize_contract(|instance: &mut Self| {
                 instance.quorum = quorum;
                 instance.governance_token = governance_token;
             })
         }
 
+        /**
+         * propose メソッド
+         */
         #[ink(message)]
         pub fn propose(
             &mut self,
@@ -112,6 +127,9 @@ pub mod governor {
             Ok(())
         }
 
+        /**
+         * vote メソッド
+         */
         #[ink(message)]
         pub fn vote(
             &mut self,
@@ -119,13 +137,16 @@ pub mod governor {
             vote: VoteType,
         ) -> Result<(), GovernorError> {
             let caller = self.env().caller();
+            // get proposal
             let proposal = self
                 .proposals
                 .get(&proposal_id)
                 .ok_or(GovernorError::ProposalNotFound)?;
+
             if proposal.executed {
                 return Err(GovernorError::ProposalAlreadyExecuted)
             }
+
             let now = self.env().block_timestamp();
             if now > proposal.vote_end {
                 return Err(GovernorError::VotePeriodEnded)
@@ -151,16 +172,22 @@ pub mod governor {
             Ok(())
         }
 
+        /**
+         * execute メソッド
+         */
         #[ink(message)]
         pub fn execute(&mut self, proposal_id: ProposalId) -> Result<(), GovernorError> {
             let mut proposal = self
                 .proposals
                 .get(&proposal_id)
                 .ok_or(GovernorError::ProposalNotFound)?;
+
             if proposal.executed {
                 return Err(GovernorError::ProposalAlreadyExecuted)
             }
+
             let proposal_vote = self.proposal_votes.get(proposal_id).unwrap_or_default();
+
             if proposal_vote.for_votes + proposal_vote.against_votes < self.quorum {
                 return Err(GovernorError::QuorumNotReached)
             }
@@ -169,6 +196,7 @@ pub mod governor {
             }
 
             proposal.executed = true;
+            // ネイティブトークンを送金
             self.env()
                 .transfer(proposal.to, proposal.amount)
                 .map_err(|_| GovernorError::TransferError)?;
